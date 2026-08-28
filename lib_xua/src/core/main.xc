@@ -2,6 +2,11 @@
 // This Software is subject to the terms of the XMOS Public Licence: Version 1.
 
 #include "xua.h"                          /* Device specific defines */
+
+#ifdef XSSDAC
+#include "xssdac/xssdac_audio_io.h"
+#endif
+
 #ifndef EXCLUDE_USB_AUDIO_MAIN
 
 /**
@@ -105,13 +110,21 @@ on tile[XUA_AUDIO_IO_TILE_NUM] : buffered in port:32 p_i2s_adc[I2S_WIRES_ADC] =
     #define p_i2s_adc null
 #endif
 
+#ifndef XSSDAC
 
 #if CODEC_MASTER
-on tile[XUA_AUDIO_IO_TILE_NUM] : buffered in port:32 p_lrclk        = PORT_I2S_LRCLK;
-on tile[XUA_AUDIO_IO_TILE_NUM] : buffered in port:32 p_bclk         = PORT_I2S_BCLK;
+on tile[XUA_AUDIO_IO_TILE_NUM] : buffered in port:32 p_lrclk = PORT_I2S_LRCLK;
+on tile[XUA_AUDIO_IO_TILE_NUM] : buffered in port:32 p_bclk  = PORT_I2S_BCLK;
 #else
-on tile[XUA_AUDIO_IO_TILE_NUM] : buffered out port:32 p_lrclk       = PORT_I2S_LRCLK;
-on tile[XUA_AUDIO_IO_TILE_NUM] : buffered out port:32 p_bclk        = PORT_I2S_BCLK;
+on tile[XUA_AUDIO_IO_TILE_NUM] : buffered out port:32 p_lrclk = PORT_I2S_LRCLK;
+on tile[XUA_AUDIO_IO_TILE_NUM] : buffered out port:32 p_bclk  = PORT_I2S_BCLK;
+#endif
+
+#else
+
+#define p_lrclk null
+#define p_bclk  null
+
 #endif
 
 #if (MCLK_REQUIRED)
@@ -121,10 +134,8 @@ on tile[XUA_AUDIO_IO_TILE_NUM] :  in port p_mclk_in                 = PORT_MCLK_
 #define p_mclk_in null
 #endif
 
-#if (SECOND_MCLK_REQUIRED)
-/* If audio I/O and USB running on different tiles we need a separate port for
- * the master clock input (to use for USB async feedback calculation) */
-on tile[XUA_XUD_TILE_NUM] : in port p_mclk_in_usb                   = PORT_MCLK_IN_USB;
+#if (SECOND_MCLK_REQUIRED) && (FB_USE_REF_CLOCK == 0)
+on tile[XUA_XUD_TILE_NUM] : in port p_mclk_in_usb = PORT_MCLK_IN_USB;
 #endif
 
 #if XUA_USB_EN
@@ -182,9 +193,8 @@ on tile[XUA_XUD_TILE_NUM] : clock    clk_spd_rx                     = CLKBLK_SPD
 
 on tile[XUA_AUDIO_IO_TILE_NUM] : clock clk_audio_mclk               = CLKBLK_MCLK;       /* Master clock */
 
-#if (XUA_AUDIO_IO_TILE_NUM != XUA_XUD_TILE_NUM) && XUA_USB_EN
-/* Separate clock/port for USB feedback calculation */
-on tile[XUA_XUD_TILE_NUM] : clock clk_audio_mclk_usb                = CLKBLK_MCLK;       /* Master clock */
+#if (XUA_AUDIO_IO_TILE_NUM != XUA_XUD_TILE_NUM) && XUA_USB_EN && (FB_USE_REF_CLOCK == 0)
+on tile[XUA_XUD_TILE_NUM] : clock clk_audio_mclk_usb = CLKBLK_MCLK;
 #endif
 
 on tile[XUA_AUDIO_IO_TILE_NUM] : clock clk_audio_bclk               = CLKBLK_I2S_BIT;    /* Bit clock */
@@ -345,24 +355,37 @@ void usb_audio_io(chanend ?c_aud_in,
 #else
 #define AUDIO_CHANNEL c_aud_in
 #endif
-            XUA_AudioHub(AUDIO_CHANNEL, clk_audio_mclk, clk_audio_bclk, p_mclk_in, p_lrclk, p_bclk, p_i2s_dac, p_i2s_adc
-#if (XUA_SPDIF_TX_EN) //&& (XUA_SPDIF_TX_TILE_NUM != XUA_AUDIO_IO_TILE_NUM)
-                , c_spdif_tx
+
+#ifdef XSSDAC
+    xssdac_audio_io(AUDIO_CHANNEL);
+#else
+    XUA_AudioHub(AUDIO_CHANNEL,
+                 clk_audio_mclk,
+                 clk_audio_bclk,
+                 p_mclk_in,
+                 p_lrclk,
+                 p_bclk,
+                 p_i2s_dac,
+                 p_i2s_adc
+#if (XUA_SPDIF_TX_EN)
+                 , c_spdif_tx
 #endif
 #if (XUA_SPDIF_RX_EN || XUA_ADAT_RX_EN)
-                , c_dig_rx
+                 , c_dig_rx
 #endif
 #if (XUA_SYNCMODE == XUA_SYNCMODE_SYNC || XUA_SPDIF_RX_EN || XUA_ADAT_RX_EN)
-                , c_audio_rate_change
+                 , c_audio_rate_change
 #endif
 #if (XUA_XUD_TILE_NUM != 0) && (XUA_AUDIO_IO_TILE_NUM == 0) && (XUA_DFU_EN == 1)
-                , dfuInterface
+                 , dfuInterface
 #endif
 #if (XUA_NUM_PDM_MICS > 0)
-                , c_pdm_pcm
+                 , c_pdm_pcm
 #endif
-            );
-        }
+    );
+#endif
+
+}
 
 #if (XUA_SPDIF_RX_EN || XUA_ADAT_RX_EN)
         {
@@ -539,18 +562,18 @@ int main()
 
                 /* Attach mclk count port to mclk clock-block (for feedback) */
                 //set_port_clock(p_for_mclk_count, clk_audio_mclk);
-#if(SECOND_MCLK_REQUIRED)
-                set_clock_src(clk_audio_mclk_usb, p_mclk_in_usb);
-                set_port_clock(p_for_mclk_count, clk_audio_mclk_usb);
-                start_clock(clk_audio_mclk_usb);
+#if (SECOND_MCLK_REQUIRED)
+
+    #if (FB_USE_REF_CLOCK == 0)
+        set_clock_src(clk_audio_mclk_usb, p_mclk_in_usb);
+        set_port_clock(p_for_mclk_count, clk_audio_mclk_usb);
+        start_clock(clk_audio_mclk_usb);
+    #endif
+
 #else
-                /* XUA_AUDIO_IO_TILE_NUM == XUA_XUD_TILE_NUM */
-                /* Clock port from same clock-block as I2S */
-                /* TODO remove asm() */
-                asm("ldw %0, dp[clk_audio_mclk]":"=r"(x));
-                asm("setclk res[%0], %1"::"r"(p_for_mclk_count), "r"(x));
-                /* This clock block is started in audiohub in case we first need to connect other logic
-                   e.g. digital Tx to it before starting */
+    /* XUA_AUDIO_IO_TILE_NUM == XUA_XUD_TILE_NUM */
+    asm("ldw %0, dp[clk_audio_mclk]":"=r"(x));
+    asm("setclk res[%0], %1"::"r"(p_for_mclk_count), "r"(x));
 #endif
                 /* Endpoint & audio buffering cores - buffers all EP's other than 0 */
                 XUA_Buffer(
