@@ -1,5 +1,6 @@
 // Copyright 2011-2025 XMOS LIMITED.
 // This Software is subject to the terms of the XMOS Public Licence: Version 1.
+#include <debug_print.h>
 #include "xua.h"
 #if XUA_USB_EN
 #include <xs1.h>
@@ -96,6 +97,10 @@ void XUA_Buffer(
 #if (NUM_USB_CHAN_OUT > 0)
     register chanend c_aud_out,
 #endif
+#ifdef XSSDAC
+            chanend c_custom_out,
+            chanend c_custom_in,
+#endif
 #if (NUM_USB_CHAN_IN > 0)
     register chanend c_aud_in,
 #endif
@@ -137,6 +142,10 @@ void XUA_Buffer(
         XUA_Buffer_Ep(
 #if (NUM_USB_CHAN_OUT > 0)
                 c_aud_out,                /* USB Audio Out*/
+#endif
+#ifdef XSSDAC
+        c_custom_out,
+        c_custom_in,
 #endif
 #if (NUM_USB_CHAN_IN > 0)
                 c_aud_in,                 /* USB Audio In */
@@ -195,6 +204,10 @@ void XUA_Buffer_Ep(
 #if (NUM_USB_CHAN_OUT > 0)
     register chanend c_aud_out,
 #endif
+#ifdef XSSDAC
+    chanend c_custom_out,
+    chanend c_custom_in,
+#endif
 #if (NUM_USB_CHAN_IN > 0)
     register chanend c_aud_in,
 #endif
@@ -235,6 +248,19 @@ void XUA_Buffer_Ep(
 
 #if (NUM_USB_CHAN_IN > 0)
     XUD_ep ep_aud_in = XUD_InitEp(c_aud_in);
+#endif
+
+#ifdef XSSDAC
+    XUD_ep ep_custom_out = XUD_InitEp(c_custom_out);
+    XUD_ep ep_custom_in  = XUD_InitEp(c_custom_in);
+#endif
+
+#ifdef XSSDAC
+    unsigned custom_out_buffer[512 / 4];
+    unsigned custom_in_buffer [512 / 4];
+    xc_ptr custom_out_ptr = array_to_xc_ptr(custom_out_buffer);
+    xc_ptr custom_in_ptr  = array_to_xc_ptr(custom_in_buffer);
+    int custom_in_busy = 0;
 #endif
 
 #if (NUM_USB_CHAN_OUT > 0) && ((NUM_USB_CHAN_IN == 0) || defined(UAC_FORCE_FEEDBACK_EP))
@@ -325,6 +351,11 @@ void XUA_Buffer_Ep(
     fb_clocks[0] = 0;
 
     /* Mark OUT endpoints ready to receive data from host */
+
+#ifdef XSSDAC
+    XUD_SetReady_OutPtr(ep_custom_out, custom_out_ptr);
+#endif
+
 #ifdef MIDI
     XUD_SetReady_OutPtr(ep_midi_from_host, midi_from_host_buffer);
 #endif
@@ -962,6 +993,51 @@ void XUA_Buffer_Ep(
                 }
                 break;
                 //::
+#endif
+
+#ifdef XSSDAC
+            case XUD_GetData_Select(c_custom_out,
+                                    ep_custom_out,
+                                    length,
+                                    result):
+            {
+                if (result == XUD_RES_OKAY)
+                {
+                    if ((length > 0) && !custom_in_busy)
+                    {
+                        for (unsigned i = 0; i < (length + 3) / 4; i++)
+                        {
+                            unsigned v;
+                            xc_ptr s = custom_out_ptr + i * 4;
+                            xc_ptr d = custom_in_ptr  + i * 4;
+
+                            read_via_xc_ptr(v, s);
+                            write_via_xc_ptr(d, v);
+                        }
+
+                        XUD_SetReady_InPtr(
+                            ep_custom_in,
+                            custom_in_ptr,
+                            length);
+
+                        custom_in_busy = 1;
+                    }
+
+                    XUD_SetReady_OutPtr(
+                        ep_custom_out,
+                        custom_out_ptr);
+                }
+                break;
+            }
+#endif
+#ifdef XSSDAC
+            case XUD_SetData_Select(c_custom_in,
+                                    ep_custom_in,
+                                    result):
+            {
+                custom_in_busy = 0;
+                break;
+            }
 #endif
         }
     }

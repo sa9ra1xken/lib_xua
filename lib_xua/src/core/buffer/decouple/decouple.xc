@@ -6,6 +6,7 @@
 #include "xassert.h"
 
 #include "debug_print.h"
+#include <stdio.h>
 
 #if XUA_USB_EN
 #include <xs1.h>
@@ -129,6 +130,99 @@ unsigned g_output_stream_active = 0;
 unsigned g_input_stream_active = 0;
 unsigned g_any_stream_active_old = 0;
 unsigned g_any_stream_active_current = 0;
+
+/*
+* DEBUG:
+* Check USB OUT payload itself for abnormal zero run
+*/
+on tile[XUA_XUD_TILE_NUM]: out port p_tp35 = PORT_TP35;
+on tile[XUA_XUD_TILE_NUM]: out port p_tp36 = PORT_TP36;
+unsigned tp35 = 0;
+
+/* ============================================================
+ * XSSDAC USB OUT DEBUG
+ * ============================================================ */
+
+#define DEBUG_JUMP_THRESHOLD  500000000
+
+static int      dbgJumpCaptured   = 0;
+static int      dbgJumpPrevLeft   = 0;
+static int      dbgJumpPrevRight  = 0;
+static int      dbgJumpLeft       = 0;
+static int      dbgJumpRight      = 0;
+static unsigned dbgJumpFrameIndex = 0;
+
+static void DebugCheckUsbOutAudioData(int released_buffer,
+                                      int datalength)
+{
+    static int prevLeft  = 0;
+    static int prevRight = 0;
+    static int havePrev  = 0;
+
+    const int frameBytes = 4;
+
+    if ((g_curSubSlot_Out != 2) ||
+        (g_numUsbChan_Out != 2))
+    {
+        return;
+    }
+
+    int frames = datalength / frameBytes;
+    int p = released_buffer + 4;
+
+    for (int n = 0; n < frames; n++)
+    {
+        int left;
+        int right;
+
+        read_short_via_xc_ptr(left, p);
+        left <<= 16;
+
+        read_short_via_xc_ptr(right, p + 2);
+        right <<= 16;
+
+        if (havePrev)
+        {
+            long long dLeft =
+                (long long)left - (long long)prevLeft;
+
+            long long dRight =
+                (long long)right - (long long)prevRight;
+
+            if ((dLeft  >  DEBUG_JUMP_THRESHOLD) ||
+                (dLeft  < -DEBUG_JUMP_THRESHOLD) ||
+                (dRight >  DEBUG_JUMP_THRESHOLD) ||
+                (dRight < -DEBUG_JUMP_THRESHOLD))
+            {
+                if (!dbgJumpCaptured)
+                {
+                    dbgJumpCaptured   = 1;
+
+                    dbgJumpPrevLeft   = prevLeft;
+                    dbgJumpPrevRight  = prevRight;
+
+                    dbgJumpLeft       = left;
+                    dbgJumpRight      = right;
+
+                    dbgJumpFrameIndex = n;
+
+                    p_tp35 <: 1;
+                }
+            }
+        }
+
+        prevLeft  = left;
+        prevRight = right;
+        havePrev  = 1;
+
+        p += frameBytes;
+    }
+}
+
+/*
+* end of DEBUG:
+* Check USB OUT payload itself for abnormal zero run
+*/
 
 static inline void _send_sample_4(chanend c_mix_out, int ch)
 {
@@ -255,6 +349,26 @@ __builtin_unreachable();
                     read_short_via_xc_ptr(sample, g_aud_from_host_rdptr);
                     g_aud_from_host_rdptr+=2;
                     sample <<= 16;
+
+                    /* Debug: detect isolated zero sample on LEFT channel */
+if (i == 0)
+{
+    static int prev2Left = 0;
+    static int prev1Left = 0;
+
+    if (prev1Left == 0)
+    {
+        /* zero inserted between two large samples of the same polarity */
+        if (((prev2Left < -100000000) && (sample < -100000000)) ||
+            ((prev2Left >  100000000) && (sample >  100000000)))
+        {
+            //p_tp35 <: 1;       // latch HIGH
+        }
+    }
+
+    prev2Left = prev1Left;
+    prev1Left = sample;
+}
 
 #if (OUTPUT_VOLUME_CONTROL == 1) && (!OUT_VOLUME_IN_MIXER)
                     unsafe
@@ -616,7 +730,15 @@ __builtin_unreachable();
             g_aud_from_host_rdptr = aud_from_host_fifo_start;
         }
 
-        outUnderflow = (g_aud_from_host_rdptr == g_aud_from_host_wrptr);
+        //outUnderflow = (g_aud_from_host_rdptr == g_aud_from_host_wrptr);
+        if(g_aud_from_host_rdptr == g_aud_from_host_wrptr)
+        {
+            outUnderflow = 1;
+        }
+        else
+        {
+            outUnderflow = 0;
+        }
 
         if (!outUnderflow)
         {
@@ -907,6 +1029,10 @@ void XUA_Buffer_Decouple(chanend c_mix_out
             {
                 /* Change in OUT channel count - note we expect this on every stream start event */
                 DISABLE_INTERRUPTS();
+
+                p_tp35 <: 0;       // ★ 異常検出ラッチをリセット
+                p_tp36 <: 0;       // ★ 異常検出ラッチをリセット
+
                 SET_SHARED_GLOBAL(g_streamChange_flag, XUA_AUDCTL_NO_COMMAND);
                 GET_SHARED_GLOBAL(g_numUsbChan_Out, g_formatChange_NumChans);
                 GET_SHARED_GLOBAL(g_curSubSlot_Out, g_formatChange_SubSlot);
@@ -993,6 +1119,8 @@ void XUA_Buffer_Decouple(chanend c_mix_out
             /* Ignore bad small packets */
             if((datalength >= (g_numUsbChan_Out * g_curSubSlot_Out)) && (released_buffer == aud_from_host_wrptr))
             {
+                /* Debug purpose only */
+                DebugCheckUsbOutAudioData(released_buffer, datalength);
 
                 /* Move the write pointer of the fifo on - round up to nearest word */
                 aud_from_host_wrptr = aud_from_host_wrptr + ((datalength+3)&~0x3) + 4;

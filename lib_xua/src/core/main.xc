@@ -4,7 +4,7 @@
 #include "xua.h"                          /* Device specific defines */
 
 #ifdef XSSDAC
-#include "xssdac/xssdac_audio_io.h"
+#include "xssdac_audio_io.h"
 #endif
 
 #ifndef EXCLUDE_USB_AUDIO_MAIN
@@ -200,6 +200,10 @@ on tile[XUA_XUD_TILE_NUM] : clock clk_audio_mclk_usb = CLKBLK_MCLK;
 on tile[XUA_AUDIO_IO_TILE_NUM] : clock clk_audio_bclk               = CLKBLK_I2S_BIT;    /* Bit clock */
 
 #if XUA_USB_EN
+
+#define ENDPOINT_NUMBER_OUT_CUSTOM  XUA_ENDPOINT_COUNT_OUT
+#define ENDPOINT_NUMBER_IN_CUSTOM   XUA_ENDPOINT_COUNT_IN
+
 /* Endpoint type tables for XUD */
 XUD_EpType epTypeTableOut[ENDPOINT_COUNT_OUT];
 XUD_EpType epTypeTableIn[ENDPOINT_COUNT_IN];
@@ -218,6 +222,10 @@ void InitEpTypeTables()
     epTypeTableOut[ENDPOINT_NUMBER_OUT_HID] = XUD_EPTYPE_INT;
 #endif
 
+    /* xSSDAC custom bulk OUT */
+    epTypeTableOut[ENDPOINT_NUMBER_OUT_CUSTOM] = XUD_EPTYPE_BUL;
+
+
     // IN
     epTypeTableIn[ENDPOINT_NUMBER_IN_CONTROL] = XUD_EPTYPE_CTL | XUD_STATUS_ENABLE;
 #if (NUM_USB_CHAN_IN > 0)
@@ -235,6 +243,10 @@ void InitEpTypeTables()
 #if XUA_OR_STATIC_HID_ENABLED
     epTypeTableIn[ENDPOINT_NUMBER_IN_HID] = XUD_EPTYPE_INT;
 #endif
+
+    /* xSSDAC custom bulk IN */
+    epTypeTableIn[ENDPOINT_NUMBER_IN_CUSTOM] = XUD_EPTYPE_BUL;
+
 }
 #endif /* XUA_USB_EN */
 
@@ -580,6 +592,12 @@ int main()
 #if (NUM_USB_CHAN_OUT > 0)
                            c_xud_out[ENDPOINT_NUMBER_OUT_AUDIO],       /* Audio Out*/
 #endif
+
+#ifdef XSSDAC
+                           c_xud_out[ENDPOINT_NUMBER_OUT_CUSTOM],
+                           c_xud_in [ENDPOINT_NUMBER_IN_CUSTOM],
+#endif
+
 #if (NUM_USB_CHAN_IN > 0)
                            c_xud_in[ENDPOINT_NUMBER_IN_AUDIO],         /* Audio In */
 #endif

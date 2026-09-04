@@ -548,6 +548,7 @@ unsigned static AudioHub_MainLoop(chanend ?c_aud, chanend ?c_spd_out
                     /* Do samples transfer */
                     /* The below looks a bit odd but forces the compiler to inline twice */
                     unsigned command;
+                    
                     if(readBuffNo)
                         command = DoSampleTransfer(c_aud, 1, underflowWord);
                     else

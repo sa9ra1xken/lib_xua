@@ -37,6 +37,10 @@ void XUA_Buffer(
 #if (NUM_USB_CHAN_OUT > 0) || defined(__DOXYGEN__)
             chanend c_aud_out,
 #endif
+#ifdef XSSDAC
+            chanend c_custom_out,
+            chanend c_custom_in,
+#endif
 #if (NUM_USB_CHAN_IN > 0) || defined(__DOXYGEN__)
             chanend c_aud_in,
 #endif
@@ -75,6 +79,10 @@ void XUA_Buffer_Ep(
 
 #if (NUM_USB_CHAN_OUT > 0)
             chanend c_aud_out,
+#endif
+#ifdef XSSDAC
+    chanend c_custom_out,
+    chanend c_custom_in,
 #endif
 #if (NUM_USB_CHAN_IN > 0) || defined(__DOXYGEN__)
             chanend c_aud_in,

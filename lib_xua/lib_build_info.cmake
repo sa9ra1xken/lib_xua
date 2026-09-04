@@ -68,4 +68,7 @@ set(LIB_COMPILER_FLAGS_dfu.xc ${LIB_COMPILER_FLAGS} -Os -mno-dual-issue)
 set(LIB_COMPILER_FLAGS_flash_interface.c ${LIB_COMPILER_FLAGS} -Os -mno-dual-issue)
 set(LIB_COMPILER_FLAGS_flashlib_user.c ${LIB_COMPILER_FLAGS} -Os -mno-dual-issue)
 
+# これはCMakeなのでコメントは #
+set(LIB_COMPILER_FLAGS_decouple.xc ${LIB_COMPILER_FLAGS} -O0)
+
 XMOS_REGISTER_MODULE()

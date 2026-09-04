@@ -802,6 +802,13 @@ typedef struct
 #endif
 #endif
 
+#ifdef XSSDAC
+    /* XSSDAC Vendor Specific Interface */
+    USB_Descriptor_Interface_t XSSDAC_Custom_Interface;
+    USB_Descriptor_Endpoint_t  XSSDAC_Custom_Out_Endpoint;
+    USB_Descriptor_Endpoint_t  XSSDAC_Custom_In_Endpoint;
+#endif
+
 }__attribute__((packed)) USB_Config_Descriptor_Audio2_t;
 
 // DFU Interface and Functional descriptor. Same for AUDIO_CLASS 1 and 2
@@ -2142,6 +2149,42 @@ USB_Config_Descriptor_Audio2_t cfgDesc_Audio2=
 
 #if XUA_OR_STATIC_HID_ENABLED
     #include "xua_hid_descriptors.h"
+#endif
+
+#ifdef XSSDAC
+
+    .XSSDAC_Custom_Interface =
+    {
+        .bLength            = sizeof(USB_Descriptor_Interface_t),
+        .bDescriptorType    = USB_DESCTYPE_INTERFACE,
+        .bInterfaceNumber   = INTERFACE_NUMBER_XSSDAC_CUSTOM,
+        .bAlternateSetting  = 0,
+        .bNumEndpoints      = 2,
+        .bInterfaceClass    = USB_CLASS_VENDOR_SPECIFIC,
+        .bInterfaceSubClass = 0,
+        .bInterfaceProtocol = 0,
+        .iInterface         = 0,
+    },
+
+    .XSSDAC_Custom_Out_Endpoint =
+    {
+        .bLength            = sizeof(USB_Descriptor_Endpoint_t),
+        .bDescriptorType    = USB_DESCTYPE_ENDPOINT,
+        .bEndpointAddress   = ENDPOINT_ADDRESS_OUT_XSSDAC_CUSTOM,
+        .bmAttributes       = 0x02,   /* Bulk */
+        .wMaxPacketSize     = 512,
+        .bInterval          = 0,
+    },
+
+    .XSSDAC_Custom_In_Endpoint =
+    {
+        .bLength            = sizeof(USB_Descriptor_Endpoint_t),
+        .bDescriptorType    = USB_DESCTYPE_ENDPOINT,
+        .bEndpointAddress   = ENDPOINT_ADDRESS_IN_XSSDAC_CUSTOM,
+        .bmAttributes       = 0x02,   /* Bulk */
+        .wMaxPacketSize     = 512,
+        .bInterval          = 0,
+    },
 #endif
 
 };
