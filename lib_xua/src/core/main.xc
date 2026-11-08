@@ -3,8 +3,12 @@
 
 #include "xua.h"                          /* Device specific defines */
 
-#ifdef XSSDAC
+#if defined(XSSDAC) && \
+    !defined(XSSDAC_SD_ONLY) && \
+    !defined(XSSDAC_USB_AUDIO_TEST)
+
 #include "xssdac_audio_io.h"
+
 #endif
 
 #ifndef EXCLUDE_USB_AUDIO_MAIN
@@ -368,8 +372,12 @@ void usb_audio_io(chanend ?c_aud_in,
 #define AUDIO_CHANNEL c_aud_in
 #endif
 
-#ifdef XSSDAC
+#if defined(XSSDAC) && \
+    !defined(XSSDAC_SD_ONLY) && \
+    !defined(XSSDAC_USB_AUDIO_TEST)
+
     xssdac_audio_io(AUDIO_CHANNEL);
+
 #else
     XUA_AudioHub(AUDIO_CHANNEL,
                  clk_audio_mclk,

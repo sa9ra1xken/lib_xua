@@ -135,9 +135,15 @@ unsigned g_any_stream_active_current = 0;
 * DEBUG:
 * Check USB OUT payload itself for abnormal zero run
 */
+#ifndef XUA_USE_DEBUG_TP35_TP36
+#define XUA_USE_DEBUG_TP35_TP36 0
+#endif
+
+#if XUA_USE_DEBUG_TP35_TP36
 on tile[XUA_XUD_TILE_NUM]: out port p_tp35 = PORT_TP35;
 on tile[XUA_XUD_TILE_NUM]: out port p_tp36 = PORT_TP36;
 unsigned tp35 = 0;
+#endif
 
 /* ============================================================
  * XSSDAC USB OUT DEBUG
@@ -205,8 +211,9 @@ static void DebugCheckUsbOutAudioData(int released_buffer,
                     dbgJumpRight      = right;
 
                     dbgJumpFrameIndex = n;
-
+#if XUA_USE_DEBUG_TP35_TP36
                     p_tp35 <: 1;
+#endif                    
                 }
             }
         }
@@ -1030,8 +1037,10 @@ void XUA_Buffer_Decouple(chanend c_mix_out
                 /* Change in OUT channel count - note we expect this on every stream start event */
                 DISABLE_INTERRUPTS();
 
+#if XUA_USE_DEBUG_TP35_TP36
                 p_tp35 <: 0;       // ★ 異常検出ラッチをリセット
                 p_tp36 <: 0;       // ★ 異常検出ラッチをリセット
+#endif
 
                 SET_SHARED_GLOBAL(g_streamChange_flag, XUA_AUDCTL_NO_COMMAND);
                 GET_SHARED_GLOBAL(g_numUsbChan_Out, g_formatChange_NumChans);
