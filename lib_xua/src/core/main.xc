@@ -7,7 +7,8 @@
     !defined(XSSDAC_SD_ONLY) && \
     !defined(XSSDAC_USB_AUDIO_TEST) && \
     !defined(XSSDAC_SD_BULK_TEST) && \
-    !defined(XSSDAC_USB_CONTROL_TEST)
+    !defined(XSSDAC_USB_CONTROL_TEST) && \
+    !defined(XSSDAC_BOOT_SELECT)
 
 #include "xssdac_audio_io.h"
 
